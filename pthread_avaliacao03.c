@@ -1,9 +1,9 @@
 #include <pthread.h>
 #include <stdio.h>
-#include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 
-#define SIZE 30
+#define SIZE 1500
 #define NBELT 3
 #define MAXWEIGHT 5
 
@@ -15,8 +15,12 @@ int globalI;
 int sum;
 int nItems;
 
+struct timeval tic;
+struct timeval ticTotal;
+struct timeval toc;
+
+double totalTime;
 double sumBeltUpdateTimes;
-int nBeltUpdateTimes;
 double sumPartialSumTimes;
 double sumLCDTimes;
 int nLCDTimes;
@@ -24,36 +28,33 @@ int nLCDTimes;
 // Increments an item
 void *incNItems(void *args)
 {
-	clock_t clkBegin;
+	gettimeofday(&tic, 0);
 	while(nItems < SIZE)
 	{
-
+		
 		// Making sure it's not going over
 		
 		if(nItems < SIZE)
 		{
 			// Mutex lock the shared variables
 			pthread_mutex_lock(&mutex);
-			clkBegin = clock();
-			
+
 			// Random weight from 1 - MAXWEIGHT
 			weight[nItems] = rand() % MAXWEIGHT + 1;
 			nItems += 1;
-			
-			sumBeltUpdateTimes += (clock() - clkBegin)/(double)CLOCKS_PER_SEC;
-			nBeltUpdateTimes++;
-			//printf("Belt update time: %f\n", clkDifference);
-			
-			
+
 			//Unlock the shared variables
 			pthread_mutex_unlock(&mutex);
-			
-			
+
 			//printf("thread %lu nItem %d\n", pthread_self(), nItems);
 		}
-		usleep(100000);
+
+		usleep(1000);
 		
 	}
+	gettimeofday(&toc, 0);
+	sumBeltUpdateTimes += (toc.tv_sec-tic.tv_sec)*1000000 + toc.tv_usec-tic.tv_usec;
+
 	// Sums the total weight
 	int partialSum = 0;
 	int id;
@@ -66,14 +67,13 @@ void *incNItems(void *args)
 	int startI = SIZE/NBELT*id;
 	int endI = SIZE/NBELT*(id+1);
 	
-	clkBegin = clock();
-	
+	gettimeofday(&tic, 0);
 	for(int i = startI; i < endI; i++)
 	{
 		partialSum += weight[i];
 	}
-	
-	sumPartialSumTimes += (clock() - clkBegin)/(double)CLOCKS_PER_SEC;
+	gettimeofday(&toc, 0);
+	sumPartialSumTimes += (toc.tv_sec-tic.tv_sec)*1000000 + toc.tv_usec-tic.tv_usec;;
 	
 	pthread_mutex_lock(&mutex);
 	sum += partialSum;
@@ -99,8 +99,8 @@ int main()
 		globalI = 0;
 		retry = 0;
 		
+		gettimeofday(&ticTotal, 0);
 		sumBeltUpdateTimes = 0;
-		nBeltUpdateTimes = 0;
 		sumPartialSumTimes = 0;
 		sumLCDTimes = 0;
 		nLCDTimes = 0;
@@ -125,21 +125,20 @@ int main()
 		// Update LCD display
 		while(nItems < SIZE)
 		{
-			clock_t clkBegin = clock();
+			gettimeofday(&tic, 0);
 			// Only updates if the value has changed
 			if(nItems != oldValue)
 			{
 				printf("LCD nItems: %d\n", nItems);
 				oldValue = nItems;
-				sumLCDTimes += (clock() - clkBegin)/(double)CLOCKS_PER_SEC;
+				gettimeofday(&toc, 0);
+				sumLCDTimes += (toc.tv_sec-tic.tv_sec)*1000000 + toc.tv_usec-tic.tv_usec;
 				nLCDTimes++;
 			}
 			
 		}
+		printf("LCD nItems: %d\n", nItems);
 		
-		
-		// Counting how long it takes to stop the threads and to sum the weight array
-		//clock_t clkBegin = clock();
 		
 		/* wait for the threads to finish */
 		for(int i = 0; i < NBELT; i++)
@@ -150,12 +149,15 @@ int main()
 				return 2;
 			}
 		}
+		gettimeofday(&toc, 0);
+		totalTime = (toc.tv_sec-ticTotal.tv_sec)*1000000 + toc.tv_usec-ticTotal.tv_usec;
 		
 
-		printf("Total Weight (thread): %d\n", sum);
-		printf("Avg belt update time: %f\n", sumBeltUpdateTimes/(double)nBeltUpdateTimes);
-		printf("Avg LCD update time: %f\n", sumLCDTimes/(double)nLCDTimes);
-		printf("Total partial sum time: %f\n", sumPartialSumTimes);
+		printf("Total Weight: %d\n", sum);
+		printf("Total belt update time: %f\n", sumBeltUpdateTimes/1000000);
+		printf("Avg LCD update time: %f\n", sumLCDTimes/(double)nLCDTimes/1000000);
+		printf("Total partial sum time: %f\n", sumPartialSumTimes/1000000);
+		printf("Total time: %f\n", totalTime/1000000);
 		
 		printf("Type (1) to retry: ");
 		scanf("%d", &retry);
