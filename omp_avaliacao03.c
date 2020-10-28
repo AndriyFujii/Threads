@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <omp.h>
+#include <unistd.h>
 
 #define SIZE 15
 #define NBELT 3
@@ -40,26 +41,20 @@ int main(int argc, char** argv)
 			
 			while(nItems < SIZE)
 			{
-				int activate = 1;
-				
-				printf("Input (1) to simulate a sensor activation: \n");
-				scanf("%d", &activate);
-				
-				if(activate == 1)
+
+				// Making sure it's not going over
+				if(nItems < SIZE)
 				{
-					// Making sure it's not going over
-					if(nItems < SIZE)
+					// Critical so only 1 task updates the values
+					#pragma omp critical
 					{
-						// Critical so only 1 task updates the values
-						#pragma omp critical
-						{
-							// Random weight from 1 - MAXWEIGHT
-							weight[nItems] = rand() % MAXWEIGHT + 1;
-							nItems += 1;
-						}
-						printf("thread %u nItem %d\n", omp_get_thread_num(), nItems);
+						// Random weight from 1 - MAXWEIGHT
+						weight[nItems] = rand() % MAXWEIGHT + 1;
+						nItems += 1;
 					}
+					printf("thread %u nItem %d\n", omp_get_thread_num(), nItems);
 				}
+				usleep(100000);
 			}
 		}
 		
